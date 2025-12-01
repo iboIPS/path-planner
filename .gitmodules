@@ -1,0 +1,3 @@
+[submodule "HouseExpo"]
+	path = HouseExpo
+	url = git@github.com:TeaganLi/HouseExpo.git
