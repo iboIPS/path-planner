@@ -2,6 +2,15 @@
 
 An interactive sandbox for comparing grid-based path planning algorithms. The app uses Pygame for rendering and provides a simple UI to draw obstacles, set start/goal locations, and watch planners animate their search.
 
+## 🚀 Clone This Repository
+
+### Standard clone
+```bash
+git clone https://github.com/iboIPS/path-planner.git
+cd path-planner
+git submodule update --init --recursive
+```
+
 ## Features
 - Multiple planners: A*, Dijkstra, D*, RRT variants (classic, *, Connect, Dynamic, Informed, Goal-Biased), PRM variants (standard, *, Lazy, Gaussian, Bridge), DWA, TEB, VFH, Potential Field, and a MultiPaths sampler.
 - Interactive map editing: paint/erase obstacles, set start/goal, undo/redo, random map generation, and random start/goal placement.
