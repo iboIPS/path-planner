@@ -2,6 +2,7 @@ from .a_star import run as run_a_star
 from .d_star import run as run_d_star
 from .dijkstra import run as run_dijkstra
 from .dwa import run as run_dwa
+from .hybrid_safety import run as run_hybrid_safety
 from .multi_paths import run as run_multi_paths
 from .potential_field import run as run_potential_field
 from .teb import run as run_teb
@@ -24,6 +25,7 @@ PLANNERS = {
     "A*": run_a_star,
     "Dijkstra": run_dijkstra,
     "D*": run_d_star,
+    "HybridSafety": run_hybrid_safety,
     "RRT": run_rrt,
     "RRT*": run_rrt_star,
     "RRTConnect": run_rrt_connect,
@@ -47,6 +49,7 @@ __all__ = [
     "run_a_star",
     "run_d_star",
     "run_dijkstra",
+    "run_hybrid_safety",
     "run_rrt",
     "run_rrt_star",
     "run_rrt_connect",

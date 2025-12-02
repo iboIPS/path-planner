@@ -26,17 +26,31 @@ ACTION_BUTTONS = [
     {"id": "random_goal", "label": "Random Goal"},
     {"id": "random_map", "label": "Random Map"},
     {"id": "load_image", "label": "Load Map Image"},
+    {"id": "choose_planner", "label": "Choose Planner (type)"},
     {"id": "rrt_inc", "label": "RRT Iter +100"},
     {"id": "rrt_dec", "label": "RRT Iter -100"},
     {"id": "prm_inc", "label": "PRM Samples +100"},
     {"id": "prm_dec", "label": "PRM Samples -100"},
+    {"id": "hybrid_len_inc", "label": "Hybrid w_len +0.1"},
+    {"id": "hybrid_len_dec", "label": "Hybrid w_len -0.1"},
+    {"id": "hybrid_safe_inc", "label": "Hybrid w_safe +0.1"},
+    {"id": "hybrid_safe_dec", "label": "Hybrid w_safe -0.1"},
+    {"id": "hybrid_dmin_inc", "label": "Hybrid d_min +0.5"},
+    {"id": "hybrid_dmin_dec", "label": "Hybrid d_min -0.5"},
+    {"id": "hybrid_cmax_inc", "label": "Hybrid c_max +100"},
+    {"id": "hybrid_cmax_dec", "label": "Hybrid c_max -100"},
+    {"id": "hybrid_lref_inc", "label": "Hybrid L_ref +0.5"},
+    {"id": "hybrid_lref_dec", "label": "Hybrid L_ref -0.5"},
+    {"id": "hybrid_set", "label": "Set Hybrid Params (type)"},
 ]
 HINT_LINES = [
     "Left click: draw obstacles",
     "Right click: erase obstacles",
     "Middle click: set start then goal (alternates)",
     "Space: run selected planner",
-    "Click planner buttons on right to choose",
+    "Press P to open planner list overlay",
+    "HybridSafety planner blends path length with obstacle clearance (P toggles list, I edits params)",
+    "I: type HybridSafety params | P: open planner overlay",
     "1-3: A*, D*, RRT",
     "4-6: Dijkstra, RRT*, PRM",
     "7-0: DWA, TEB, VFH, Potential Field",
@@ -175,6 +189,49 @@ def draw_hints(screen: pygame.Surface, font: pygame.font.Font) -> None:
         y += surf.get_height() + 4
 
 
+def draw_planner_overlay(screen: pygame.Surface, font: pygame.font.Font, state: AppState) -> None:
+    if not state.planner_overlay:
+        return
+    overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((255, 255, 255, 235))
+    screen.blit(overlay, (0, 0))
+
+    x = 30
+    y = 30
+    header = font.render("Planner Select (P toggles, Up/Down + Enter, Esc closes)", True, (0, 0, 0))
+    screen.blit(header, (x, y))
+    y += header.get_height() + 10
+
+    for idx, name in enumerate(state.planner_menu or list(PLANNERS.keys())):
+        active = idx == state.planner_cursor
+        bg_rect = pygame.Rect(x, y, 260, 24)
+        pygame.draw.rect(screen, (210, 230, 255) if active else (235, 235, 235), bg_rect, border_radius=4)
+        pygame.draw.rect(screen, GRAY, bg_rect, 1, border_radius=4)
+        label = font.render(name, True, (0, 0, 0))
+        screen.blit(label, (x + 8, y + 4))
+        y += bg_rect.height + 4
+
+
+def draw_hybrid_input_overlay(screen: pygame.Surface, font: pygame.font.Font, state: AppState) -> None:
+    if not state.hybrid_input_active:
+        return
+    overlay = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
+    overlay.fill((255, 255, 255, 235))
+    screen.blit(overlay, (0, 0))
+
+    x = 30
+    y = 30
+    lines = [
+        "HybridSafety Params (I to start, Enter to apply, Esc to cancel)",
+        "Format: w_length, w_safety, L_ref, d_min, c_max",
+        f"Current: {state.hybrid_input_text}",
+    ]
+    for line in lines:
+        surf = font.render(line, True, (0, 0, 0))
+        screen.blit(surf, (x, y))
+        y += surf.get_height() + 6
+
+
 def layout_action_buttons(font: pygame.font.Font) -> List[Dict[str, pygame.Rect]]:
     buttons: List[Dict[str, pygame.Rect]] = []
     x = WIDTH + 10
@@ -186,23 +243,11 @@ def layout_action_buttons(font: pygame.font.Font) -> List[Dict[str, pygame.Rect]
     return buttons
 
 
-def layout_planner_buttons(font: pygame.font.Font, start_y: int = 20) -> List[Dict[str, pygame.Rect]]:
-    buttons: List[Dict[str, pygame.Rect]] = []
-    x = WIDTH + 10
-    y = start_y
-    for name in PLANNERS.keys():
-        rect = pygame.Rect(x, y, UI_PANEL_WIDTH - 20, 28)
-        buttons.append({"name": name, "rect": rect})
-        y += 34
-    return buttons
-
-
 def draw_planner_panel(
     screen: pygame.Surface,
     font: pygame.font.Font,
     state: AppState,
     action_buttons: List[Dict[str, pygame.Rect]],
-    planner_buttons: List[Dict[str, pygame.Rect]],
 ) -> None:
     panel_rect = pygame.Rect(WIDTH, 0, UI_PANEL_WIDTH, HEIGHT)
     pygame.draw.rect(screen, (245, 245, 245), panel_rect)
@@ -223,24 +268,16 @@ def draw_planner_panel(
     param_lines = [
         f"RRT max_iter: {state.rrt_max_iter}",
         f"PRM samples: {state.prm_samples}",
+        f"Hybrid w_len: {state.hybrid_w_length:.2f}",
+        f"Hybrid w_safe: {state.hybrid_w_safety:.2f}",
+        f"Hybrid L_ref: {state.hybrid_l_ref:.2f}",
+        f"Hybrid d_min: {state.hybrid_d_min:.2f}",
+        f"Hybrid c_max: {state.hybrid_c_max:.1f}",
     ]
     for line in param_lines:
         surf = font.render(line, True, (0, 0, 0))
         screen.blit(surf, (WIDTH + 10, param_y))
         param_y += surf.get_height() + 2
-
-    planner_header = font.render("Planners", True, (0, 0, 0))
-    screen.blit(planner_header, (WIDTH + 10, param_y + 4))
-
-    for button in planner_buttons:
-        rect = button["rect"]
-        active = state.planner_mode == button["name"]
-        bg = (200, 220, 255) if active else (230, 230, 230)
-        pygame.draw.rect(screen, bg, rect, border_radius=4)
-        pygame.draw.rect(screen, GRAY, rect, 1, border_radius=4)
-
-        label = font.render(button["name"], True, (0, 0, 0))
-        screen.blit(label, (rect.x + 8, rect.y + 5))
 
 
 def render_frame(
@@ -251,14 +288,15 @@ def render_frame(
     visited: Optional[Iterable[Point]] = None,
     tree_lines: Optional[List[Tuple[Point, Point]]] = None,
     action_buttons: Optional[List[Dict[str, pygame.Rect]]] = None,
-    planner_buttons: Optional[List[Dict[str, pygame.Rect]]] = None,
 ) -> None:
     screen.fill(WHITE)
     draw_grid(screen, state, visited=visited, tree_lines=tree_lines)
-    if planner_buttons is not None and action_buttons is not None:
-        draw_planner_panel(screen, font, state, action_buttons, planner_buttons)
+    if action_buttons is not None:
+        draw_planner_panel(screen, font, state, action_buttons)
     draw_stats(screen, font, state)
     draw_multi_legend(screen, font, state)
     if state.show_hints:
         draw_hints(screen, font)
+    draw_planner_overlay(screen, font, state)
+    draw_hybrid_input_overlay(screen, font, state)
     pygame.display.flip()

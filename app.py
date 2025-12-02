@@ -2,19 +2,45 @@ import sys
 from typing import Callable, Iterable, List, Optional, Tuple
 
 import pygame
-from tkinter import filedialog, Tk
 
 from src.config import CELL_SIZE, GRID_SIZE
 from src.planners import PLANNERS
 from src.render import (
     init_display,
     layout_action_buttons,
-    layout_planner_buttons,
     render_frame,
 )
 from src.state import AppState
 
 Point = Tuple[int, int]
+
+
+def _apply_hybrid_input(state: AppState) -> None:
+    text = state.hybrid_input_text.strip()
+    if not text:
+        state.hybrid_input_active = False
+        return
+    try:
+        parts = [p.strip() for p in text.split(",")]
+        if len(parts) != 5:
+            print("Enter 5 comma-separated values for w_len, w_safe, L_ref, d_min, c_max")
+            return
+        w_len, w_safe, l_ref, d_min, c_max = [float(p) for p in parts]
+        state.hybrid_w_length = max(0.0, round(w_len, 3))
+        state.hybrid_w_safety = max(0.0, round(w_safe, 3))
+        state.hybrid_l_ref = max(0.01, round(l_ref, 3))
+        state.hybrid_d_min = max(0.0, round(d_min, 3))
+        state.hybrid_c_max = max(0.0, round(c_max, 3))
+    except Exception as exc:
+        print(f"Could not parse HybridSafety params: {exc}")
+    finally:
+        state.hybrid_input_active = False
+
+
+def _start_planner_overlay(state: AppState) -> None:
+    state.planner_menu = list(PLANNERS.keys())
+    state.planner_cursor = min(state.planner_cursor, max(0, len(state.planner_menu) - 1))
+    state.planner_overlay = True
 
 
 def _draw_and_wait(
@@ -83,6 +109,16 @@ def run_planner(
             extra_kwargs["max_iter"] = state.rrt_max_iter
         if "PRM" in state.planner_mode:
             extra_kwargs["num_samples"] = state.prm_samples
+        if state.planner_mode == "HybridSafety":
+            extra_kwargs.update(
+                {
+                    "w_length": state.hybrid_w_length,
+                    "w_safety": state.hybrid_w_safety,
+                    "l_ref": state.hybrid_l_ref,
+                    "d_min": state.hybrid_d_min,
+                    "c_max": state.hybrid_c_max,
+                }
+            )
 
         result = planner_fn(
             state.grid,
@@ -105,6 +141,49 @@ def handle_keydown(
     screen: pygame.Surface,
     font: pygame.font.Font,
 ) -> None:
+    if state.planner_overlay:
+        if event.key == pygame.K_p:
+            state.planner_overlay = False
+            return
+        if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            if state.planner_menu:
+                state.planner_mode = state.planner_menu[state.planner_cursor]
+            state.planner_overlay = False
+        elif event.key == pygame.K_ESCAPE:
+            state.planner_overlay = False
+        elif event.key == pygame.K_DOWN:
+            if state.planner_menu:
+                state.planner_cursor = (state.planner_cursor + 1) % len(state.planner_menu)
+        elif event.key == pygame.K_UP:
+            if state.planner_menu:
+                state.planner_cursor = (state.planner_cursor - 1) % len(state.planner_menu)
+        return
+
+    if state.hybrid_input_active:
+        if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            _apply_hybrid_input(state)
+            return
+        if event.key == pygame.K_ESCAPE:
+            state.hybrid_input_active = False
+            return
+        if event.key == pygame.K_BACKSPACE:
+            state.hybrid_input_text = state.hybrid_input_text[:-1]
+            return
+        ch = event.unicode
+        if ch and ch in "0123456789.-, ":
+            state.hybrid_input_text += ch
+        return
+
+    if event.key == pygame.K_p:
+        _start_planner_overlay(state)
+        return
+    if event.key == pygame.K_i:
+        state.hybrid_input_active = True
+        state.hybrid_input_text = (
+            f"{state.hybrid_w_length}, {state.hybrid_w_safety}, "
+            f"{state.hybrid_l_ref}, {state.hybrid_d_min}, {state.hybrid_c_max}"
+        )
+        return
     if event.key == pygame.K_SPACE:
         run_planner(state, screen, font)
     elif event.key == pygame.K_r:
@@ -163,7 +242,6 @@ def main() -> None:
     screen, font = init_display()
     state = AppState(GRID_SIZE, CELL_SIZE)
     action_buttons = layout_action_buttons(font)
-    planner_buttons = layout_planner_buttons(font, start_y=action_buttons[-1]["rect"].bottom + 70)
     drawing = False
     draw_mode = 1
 
@@ -172,7 +250,6 @@ def main() -> None:
             screen,
             font,
             state,
-            planner_buttons=planner_buttons,
             action_buttons=action_buttons,
         )
 
@@ -207,6 +284,8 @@ def main() -> None:
                                     file_path = result.stdout.strip()
                                     if file_path:
                                         state.load_map_from_image(file_path)
+                            elif btn["id"] == "choose_planner":
+                                _start_planner_overlay(state)
                             elif btn["id"] == "rrt_inc":
                                 state.rrt_max_iter = min(state.rrt_max_iter + 100, 10000)
                             elif btn["id"] == "rrt_dec":
@@ -215,18 +294,35 @@ def main() -> None:
                                 state.prm_samples = min(state.prm_samples + 100, 5000)
                             elif btn["id"] == "prm_dec":
                                 state.prm_samples = max(state.prm_samples - 100, 50)
+                            elif btn["id"] == "hybrid_len_inc":
+                                state.hybrid_w_length = round(state.hybrid_w_length + 0.1, 2)
+                            elif btn["id"] == "hybrid_len_dec":
+                                state.hybrid_w_length = max(0.0, round(state.hybrid_w_length - 0.1, 2))
+                            elif btn["id"] == "hybrid_safe_inc":
+                                state.hybrid_w_safety = round(state.hybrid_w_safety + 0.1, 2)
+                            elif btn["id"] == "hybrid_safe_dec":
+                                state.hybrid_w_safety = max(0.0, round(state.hybrid_w_safety - 0.1, 2))
+                            elif btn["id"] == "hybrid_dmin_inc":
+                                state.hybrid_d_min = round(state.hybrid_d_min + 0.5, 2)
+                            elif btn["id"] == "hybrid_dmin_dec":
+                                state.hybrid_d_min = max(0.0, round(state.hybrid_d_min - 0.5, 2))
+                            elif btn["id"] == "hybrid_cmax_inc":
+                                state.hybrid_c_max = min(5000.0, state.hybrid_c_max + 100.0)
+                            elif btn["id"] == "hybrid_cmax_dec":
+                                state.hybrid_c_max = max(0.0, state.hybrid_c_max - 100.0)
+                            elif btn["id"] == "hybrid_lref_inc":
+                                state.hybrid_l_ref = round(state.hybrid_l_ref + 0.5, 2)
+                            elif btn["id"] == "hybrid_lref_dec":
+                                state.hybrid_l_ref = max(0.1, round(state.hybrid_l_ref - 0.5, 2))
+                            elif btn["id"] == "hybrid_set":
+                                state.hybrid_input_active = True
+                                state.hybrid_input_text = (
+                                    f"{state.hybrid_w_length}, {state.hybrid_w_safety}, "
+                                    f"{state.hybrid_l_ref}, {state.hybrid_d_min}, {state.hybrid_c_max}"
+                                )
                             handled = True
                             break
                     if handled:
-                        continue
-                    # Check planner buttons
-                    clicked_planner = False
-                    for btn in planner_buttons:
-                        if btn["rect"].collidepoint(mouse_pos):
-                            state.planner_mode = btn["name"]
-                            clicked_planner = True
-                            break
-                    if clicked_planner:
                         continue
                     drawing = True
                     draw_mode = 1

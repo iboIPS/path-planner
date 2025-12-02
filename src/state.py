@@ -35,6 +35,18 @@ class AppState:
         self.solution_iter: Optional[int] = None
         self.rrt_max_iter: int = 1000
         self.prm_samples: int = 500
+        # HybridSafety planner params
+        self.hybrid_w_length: float = 1.0
+        self.hybrid_w_safety: float = 2.0
+        self.hybrid_l_ref: float = 1.0
+        self.hybrid_d_min: float = 1.5
+        self.hybrid_c_max: float = 1000.0
+        # Overlays / input
+        self.planner_overlay: bool = False
+        self.planner_cursor: int = 0
+        self.planner_menu: List[str] = []
+        self.hybrid_input_active: bool = False
+        self.hybrid_input_text: str = ""
 
     def _empty_grid(self) -> Grid:
         return [[0 for _ in range(self.grid_size)] for _ in range(self.grid_size)]
