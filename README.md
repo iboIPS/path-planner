@@ -44,8 +44,7 @@ pixi run python app.py
 ## Controls (quick reference)
 - Mouse: left = draw obstacles, right = erase, middle = set start then goal (alternates)
 - Space = run selected planner; click planner buttons to switch modes
-- 1–3: A*, D*, RRT; 4–6: Dijkstra, RRT*, PRM; 7–0: DWA, TEB, VFH, PotentialField
-- U = MultiPaths mode (N defaults to 20); Up/Down adjust N
+- p = select solution
 - A = toggle animation; `[` / `]` = slow/fast animation
 - M = random map; G = random start/goal; R = reset grid
 - Ctrl+U = undo; Y = redo; H = toggle on-screen hints
